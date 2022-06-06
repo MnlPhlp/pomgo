@@ -12,6 +12,7 @@ import (
 	"github.com/MnlPhlp/pomgo/modes"
 	"github.com/MnlPhlp/pomgo/parsing"
 	"github.com/cheggaaa/pb/v3"
+	"github.com/gen2brain/beeep"
 	"github.com/mattn/go-tty"
 )
 
@@ -30,7 +31,12 @@ func remTimeStr(rem time.Duration) string {
 	return fmt.Sprintf("%02d:%02d remaining", min, sec)
 }
 
-func notify(text string) {}
+func notify(text string) {
+	err := beeep.Notify("pomgo", text, "assets/information.png")
+	if err != nil {
+		panic(err)
+	}
+}
 
 func runPart(runTime time.Duration) {
 	start := time.Now()
