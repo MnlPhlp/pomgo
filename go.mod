@@ -2,7 +2,10 @@ module github.com/MnlPhlp/pomgo
 
 go 1.18
 
-require github.com/cheggaaa/pb/v3 v3.0.8
+require (
+	github.com/cheggaaa/pb/v3 v3.0.8
+	github.com/mattn/go-tty v0.0.4
+)
 
 require (
 	github.com/VividCortex/ewma v1.1.1 // indirect

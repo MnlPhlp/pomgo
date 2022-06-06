@@ -3,37 +3,21 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"log"
 	"os"
-	"strconv"
-	"strings"
 	"time"
-	"unicode"
 
+	"github.com/MnlPhlp/pomgo/modes"
+	"github.com/MnlPhlp/pomgo/parsing"
 	"github.com/cheggaaa/pb/v3"
+	"github.com/mattn/go-tty"
 )
 
 const (
-	WORK = iota
-	SHORT_BREAK
-	LONG_BREAK
-	CUSTOM
 	useNotifications = true
 	colorReset       = "\033[0m"
 	colorGreen       = "\033[32m"
 )
-
-var (
-	modeTime = []time.Duration{25 * time.Minute, 5 * time.Minute, 15 * time.Minute}
-	modeText = []string{"time to work", "take a short break", "take a long break", "unnamed custom Interval"}
-	modeDesc = []string{"work", "short break", "long break", "custom"}
-)
-
-var modes = map[rune]int{
-	'w': WORK,
-	's': SHORT_BREAK,
-	'l': LONG_BREAK,
-	'c': CUSTOM,
-}
 
 //go:embed help.txt
 var help string
@@ -47,38 +31,28 @@ func remTimeStr(rem time.Duration) string {
 func notify(text string) {}
 
 func runPart(runTime time.Duration) {
+	start := time.Now()
 	remTime := runTime
 	seconds := int(runTime.Seconds())
 
-	tmpl := `{{ bar . "<" "#" "#" "." ">"}} {{percent . "%3.f%%"}} {{string . "remaining" | green}}`
+	tmpl := `{{ bar . "[" "=" ">" "." "]"}} {{percent . "%3.f%%"}} {{string . "remaining" | green}}`
 	var bar = pb.ProgressBarTemplate(tmpl).Start(seconds)
 	bar.Set("remaining", remTimeStr(remTime))
 	bar.SetMaxWidth(100)
 
+	sleepTime := time.Second - time.Since(start)
 	for i := 0; i < seconds; i++ {
-		time.Sleep(time.Second)
+		start = time.Now()
+		time.Sleep(sleepTime)
 		bar.Increment()
 		remTime -= time.Second
 		bar.Set("remaining", remTimeStr(remTime))
+		// calculate sleep time to adjust for delays
+		sleepTime = 2*time.Second - time.Since(start)
 	}
 
 	bar.Finish()
 	fmt.Println()
-
-	if useNotifications {
-		/*import notify
-		  proc notify(text: string) =
-		    var n: Notification = newNotification("pomTimer", text, "dialog-information")
-		    n.timeout = 10000
-		    discard n.show()
-		*/
-	}
-}
-
-type Interval struct {
-	mode int
-	text string
-	time time.Duration
 }
 
 func printTime(t time.Duration) {
@@ -91,13 +65,13 @@ func printTime(t time.Duration) {
 	fmt.Printf("%v%vmin\n", hourText, min)
 }
 
-func showTimeOverview(intervals []Interval, iterations int) {
+func showTimeOverview(intervals []parsing.Interval, iterations int) {
 	completeTime := time.Duration(0)
 	workTime := time.Duration(0)
 	for _, interval := range intervals {
-		completeTime += interval.time
-		if interval.mode == WORK {
-			workTime += interval.time
+		completeTime += interval.Time
+		if interval.Mode == modes.WORK {
+			workTime += interval.Time
 		}
 	}
 	completeTime *= time.Duration(iterations)
@@ -111,118 +85,19 @@ func showTimeOverview(intervals []Interval, iterations int) {
 	fmt.Printf("finished at:  %v\n", finishTime.Local().Format("15:04"))
 }
 
-func showInfo(intervals []Interval, iterations int) {
+func showInfo(intervals []parsing.Interval, iterations int) {
 	fmt.Println("\nyour plan:")
 	for _, interval := range intervals {
-		time := interval.time
+		time := interval.Time
 		text := ""
-		if interval.text != "" {
-			text = fmt.Sprintf("text: %v", interval.text)
+		if interval.Text != "" {
+			text = fmt.Sprintf("text: %v", interval.Text)
 		}
-		mode := modeDesc[interval.mode]
+		mode := modes.Desc[interval.Mode]
 		fmt.Printf("  mode: %-12s  time: %v min  %v\n", mode, time.Minutes(), text)
 	}
 	fmt.Printf("\n  iterations: %v\n", iterations)
 	showTimeOverview(intervals, iterations)
-}
-
-type planString string
-
-func (s planString) nextChar(i int) rune {
-	if len(s) >= i+2 {
-		return []rune(s)[i+1]
-	} else {
-		return '_'
-	}
-}
-
-func isValidMode(c rune) bool {
-	for mode, _ := range modes {
-		if c == mode {
-			return true
-		}
-	}
-	return false
-}
-
-func parsePlan(plan planString) []Interval {
-	parsingTime := false
-	parsingText := false
-	ok := false
-	currentMode := 0
-	timeStr := ""
-	text := ""
-	result := []Interval{}
-	for i, c := range plan {
-		// parse custom time for a mode
-		if parsingTime {
-			if unicode.IsNumber(c) {
-				timeStr += string(c)
-			} else {
-				parsingTime = false
-				if currentMode == CUSTOM {
-					parsingText = true
-				} else {
-					minutes, _ := strconv.Atoi(timeStr)
-					result = append(result, Interval{
-						mode: currentMode,
-						text: "",
-						time: time.Duration(time.Duration(minutes) * time.Minute),
-					})
-					timeStr = ""
-				}
-			}
-		}
-		// parse custom text for a custom interval
-		if parsingText {
-			if c == ':' {
-				parsingText = false
-				minutes, _ := strconv.Atoi(timeStr)
-				text = strings.Replace(text, "_", " ", -1)
-				result = append(result, Interval{
-					mode: currentMode,
-					text: "",
-					time: time.Duration(time.Duration(minutes) * time.Minute),
-				})
-				text = ""
-				continue
-			} else {
-				text += string(c)
-			}
-		}
-		// start to parse a new mode
-		if !parsingTime && !parsingText {
-			if currentMode, ok = modes[c]; ok {
-				if unicode.IsNumber(plan.nextChar(i)) {
-					parsingTime = true
-				} else {
-					if currentMode == CUSTOM {
-						panic("Error: custom intervals need a specified time")
-					}
-					result = append(result, Interval{
-						mode: currentMode,
-						text: "",
-						time: modeTime[currentMode],
-					})
-				}
-			} else {
-				panic(fmt.Errorf("Error: invalid mode %v", c))
-			}
-		}
-	}
-	//check if parsing finished successfully
-	if parsingTime {
-		minutes, _ := strconv.Atoi(timeStr)
-		result = append(result, Interval{
-			mode: currentMode,
-			text: "",
-			time: time.Duration(time.Duration(minutes) * time.Minute),
-		})
-	}
-	if parsingText {
-		panic("Error: missing ':' to end custom task")
-	}
-	return result
 }
 
 func main() {
@@ -230,6 +105,8 @@ func main() {
 	iterations := 1
 	showPlan := false
 	showTime := false
+
+	go watchExit()
 	/*if paramCount() >= 1{}
 	    for opt in getopt():
 	      if opt.kind == cmdArgument:
@@ -262,11 +139,14 @@ func main() {
 	  else:
 	*/
 	plan = "wswswswlwswswsw"
+	if len(os.Args) == 2 {
+		plan = os.Args[1]
+	}
 
 	if plan == "" {
 		os.Exit(0)
 	}
-	intervals := parsePlan(planString(plan))
+	intervals := parsing.ParsePlan(parsing.PlanString(plan))
 	if showPlan {
 		showInfo(intervals, iterations)
 	} else if showTime {
@@ -278,10 +158,10 @@ func main() {
 				fmt.Printf("iteration %v of %v\n", i, iterations)
 			}
 			for _, interval := range intervals {
-				time := interval.time
-				text := modeText[interval.mode]
-				if interval.text != "" {
-					text = interval.text
+				time := interval.Time
+				text := modes.Text[interval.Mode]
+				if interval.Text != "" {
+					text = interval.Text
 				}
 				fmt.Println(colorGreen + text + colorReset)
 				if useNotifications {
@@ -291,5 +171,24 @@ func main() {
 			}
 		}
 		fmt.Println("")
+	}
+}
+
+func watchExit() {
+	tty, err := tty.Open()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer tty.Close()
+
+	for {
+		r, err := tty.ReadRune()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if r == 'q' {
+			fmt.Println("")
+			os.Exit(0)
+		}
 	}
 }
