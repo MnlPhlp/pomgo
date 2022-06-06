@@ -2,9 +2,11 @@ package main
 
 import (
 	_ "embed"
+	"flag"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/MnlPhlp/pomgo/modes"
@@ -79,7 +81,7 @@ func showTimeOverview(intervals []parsing.Interval, iterations int) {
 	fmt.Print("\ntotal time:   ")
 	printTime(completeTime)
 
-	fmt.Print("\nworking time:   ")
+	fmt.Print("working time: ")
 	printTime(workTime)
 	finishTime := time.Now().Add(completeTime)
 	fmt.Printf("finished at:  %v\n", finishTime.Local().Format("15:04"))
@@ -101,46 +103,25 @@ func showInfo(intervals []parsing.Interval, iterations int) {
 }
 
 func main() {
+	go watchExit()
+
 	plan := ""
 	iterations := 1
 	showPlan := false
 	showTime := false
 
-	go watchExit()
-	/*if paramCount() >= 1{}
-	    for opt in getopt():
-	      if opt.kind == cmdArgument:
-	        if fileExists(opt.key):
-	          # read tasks from the file
-	          var tmp = readFile(paramStr(1))
-	          for c in Whitespace:
-	            tmp = tmp.replace(&"{c}","")
-	          plan &= tmp
-	        else:
-	          # read tasks from the comandline
-	          plan &= opt.key
-	      else:
-	        # parse Options
-	        case opt.key:
-	          of "h","help":
-	            fmt.Println(help)
-	            quit(0)
-	          of "p","plan":
-	            showPlan = true
-	          of "t","time":
-	            showTime = true
-	          of "r","repeat":
-	            try:
-	              iterations = opt.val.parseInt()
-	            except ValueError:
-	              quit("Error: invalid value " & opt.val & " for option " & opt.key)
-	          else:
-	            quit("Error: invalid option " & opt.key)
-	  else:
-	*/
+	flag.BoolVar(&showPlan, "p", false, "Specify to show plan and exit")
+	flag.BoolVar(&showTime, "t", false, "Specify to show time and exit")
+	flag.IntVar(&iterations, "i", 1, "set numer of iterations")
+
+	flag.Parse()
+
 	plan = "wswswswlwswswsw"
-	if len(os.Args) == 2 {
-		plan = os.Args[1]
+	if len(flag.Args()) == 1 {
+		plan = flag.Args()[0]
+		if file, err := os.ReadFile(plan); err == nil {
+			plan = strings.TrimSpace(string(file))
+		}
 	}
 
 	if plan == "" {
