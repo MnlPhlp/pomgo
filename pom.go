@@ -9,17 +9,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MnlPhlp/pomgo/display"
 	"github.com/MnlPhlp/pomgo/modes"
 	"github.com/MnlPhlp/pomgo/parsing"
 	"github.com/cheggaaa/pb/v3"
-	"github.com/gen2brain/beeep"
 	"github.com/mattn/go-tty"
 )
 
 const (
-	useNotifications = true
-	colorReset       = "\033[0m"
-	colorGreen       = "\033[32m"
+	colorReset = "\033[0m"
+	colorGreen = "\033[32m"
 )
 
 //go:embed help.txt
@@ -29,13 +28,6 @@ func remTimeStr(rem time.Duration) string {
 	min := int(rem.Minutes())
 	sec := int(rem.Seconds()) % 60
 	return fmt.Sprintf("%02d:%02d remaining", min, sec)
-}
-
-func notify(text string) {
-	err := beeep.Notify("pomgo", text, "assets/information.png")
-	if err != nil {
-		panic(err)
-	}
 }
 
 func runPart(runTime time.Duration) {
@@ -63,51 +55,6 @@ func runPart(runTime time.Duration) {
 	fmt.Println()
 }
 
-func printTime(t time.Duration) {
-	min := int(t.Minutes()) % 60
-	hour := int(t.Hours())
-	hourText := ""
-	if hour > 0 {
-		hourText = fmt.Sprintf("%vh:", hour)
-	}
-	fmt.Printf("%v%vmin\n", hourText, min)
-}
-
-func showTimeOverview(intervals []parsing.Interval, iterations int) {
-	completeTime := time.Duration(0)
-	workTime := time.Duration(0)
-	for _, interval := range intervals {
-		completeTime += interval.Time
-		if interval.Mode == modes.WORK {
-			workTime += interval.Time
-		}
-	}
-	completeTime *= time.Duration(iterations)
-	workTime *= time.Duration(iterations)
-	fmt.Print("\ntotal time:   ")
-	printTime(completeTime)
-
-	fmt.Print("working time: ")
-	printTime(workTime)
-	finishTime := time.Now().Add(completeTime)
-	fmt.Printf("finished at:  %v\n", finishTime.Local().Format("15:04"))
-}
-
-func showInfo(intervals []parsing.Interval, iterations int) {
-	fmt.Println("\nyour plan:")
-	for _, interval := range intervals {
-		time := interval.Time
-		text := ""
-		if interval.Text != "" {
-			text = fmt.Sprintf("text: %v", interval.Text)
-		}
-		mode := modes.Desc[interval.Mode]
-		fmt.Printf("  mode: %-12s  time: %v min  %v\n", mode, time.Minutes(), text)
-	}
-	fmt.Printf("\n  iterations: %v\n", iterations)
-	showTimeOverview(intervals, iterations)
-}
-
 func main() {
 	go watchExit()
 
@@ -115,16 +62,24 @@ func main() {
 	iterations := 1
 	showPlan := false
 	showTime := false
+	noNotifications := false
 
-	flag.BoolVar(&showPlan, "p", false, "Specify to show plan and exit")
-	flag.BoolVar(&showTime, "t", false, "Specify to show time and exit")
-	flag.IntVar(&iterations, "i", 1, "set numer of iterations")
+	flag.BoolVar(&showPlan, "p", false, "show plan and exit")
+	flag.BoolVar(&showTime, "t", false, "show time and exit")
+	flag.IntVar(&iterations, "r", 1, "set numer of iterations")
+	flag.BoolVar(&noNotifications, "n", false, "disable notifications")
+	flag.Usage = func() {
+		fmt.Println(help)
+	}
 
 	flag.Parse()
 
 	plan = "wswswswlwswswsw"
-	if len(flag.Args()) == 1 {
-		plan = flag.Args()[0]
+	if len(flag.Args()) > 0 {
+		plan = ""
+		for i := 0; i < len(flag.Args()); i++ {
+			plan += flag.Args()[0]
+		}
 		if file, err := os.ReadFile(plan); err == nil {
 			plan = strings.TrimSpace(string(file))
 		}
@@ -135,11 +90,11 @@ func main() {
 	}
 	intervals := parsing.ParsePlan(parsing.PlanString(plan))
 	if showPlan {
-		showInfo(intervals, iterations)
+		display.ShowInfo(intervals, iterations)
 	} else if showTime {
-		showTimeOverview(intervals, iterations)
+		display.ShowTimeOverview(intervals, iterations)
 	} else {
-		showInfo(intervals, iterations)
+		display.ShowInfo(intervals, iterations)
 		for i := 1; i <= iterations; i++ {
 			if iterations > 1 {
 				fmt.Printf("iteration %v of %v\n", i, iterations)
@@ -151,8 +106,8 @@ func main() {
 					text = interval.Text
 				}
 				fmt.Println(colorGreen + text + colorReset)
-				if useNotifications {
-					notify(text)
+				if !noNotifications {
+					display.Notify(text)
 				}
 				runPart(time)
 			}

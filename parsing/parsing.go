@@ -35,8 +35,8 @@ func ParsePlan(plan PlanString) []Interval {
 	text := ""
 	result := []Interval{}
 	for i, c := range plan {
-		// parse custom time for a mode
 		if parsingTime {
+			// parse custom time for a mode
 			if unicode.IsNumber(c) {
 				timeStr += string(c)
 			} else {
@@ -53,9 +53,8 @@ func ParsePlan(plan PlanString) []Interval {
 					timeStr = ""
 				}
 			}
-		}
-		// parse custom text for a custom interval
-		if parsingText {
+		} else if parsingText {
+			// parse custom text for a custom interval
 			if c == ':' {
 				parsingText = false
 				minutes, _ := strconv.Atoi(timeStr)
@@ -70,9 +69,8 @@ func ParsePlan(plan PlanString) []Interval {
 			} else {
 				text += string(c)
 			}
-		}
-		// start to parse a new mode
-		if !parsingTime && !parsingText {
+		} else {
+			// start to parse a new mode
 			if currentMode, ok = modes.ModeMap[c]; ok {
 				if unicode.IsNumber(plan.nextChar(i)) {
 					parsingTime = true
