@@ -43,6 +43,7 @@ func ParsePlan(plan PlanString) []Interval {
 				parsingTime = false
 				if currentMode == modes.CUSTOM {
 					parsingText = true
+					text += string(c)
 				} else {
 					minutes, _ := strconv.Atoi(timeStr)
 					result = append(result, Interval{

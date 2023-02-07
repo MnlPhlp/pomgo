@@ -78,7 +78,7 @@ func main() {
 	if len(flag.Args()) > 0 {
 		plan = ""
 		for i := 0; i < len(flag.Args()); i++ {
-			plan += flag.Args()[0]
+			plan += flag.Args()[i]
 		}
 		if file, err := os.ReadFile(plan); err == nil {
 			plan = strings.TrimSpace(string(file))
